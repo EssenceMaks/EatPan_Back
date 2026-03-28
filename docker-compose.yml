@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  valkey_cache:
+    image: valkey/valkey:latest
+    container_name: valkey_cache
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - default
+
+  django_api:
+    build: .
+    container_name: django_api
+    # Під час розробки ми використовуємо runserver для гарячого перезавантаження (Hot Reload).
+    # На продакшені тут буде команда Gunicorn, винесена в Dockerfile.
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - valkey_cache
+    restart: unless-stopped
+    networks:
+      - default
+      - supabase_net
+
+networks:
+  default:
+    name: eatpan_back_default
+  supabase_net:
+    external: true
+    name: supabase_default
