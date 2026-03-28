@@ -13,5 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копіюємо проєкт
 COPY . /app/
 
+# Збираємо статику для Render (щоб адмінка працювала в хмарі без Nginx)
+RUN python manage.py collectstatic --noinput
+
 # За замовчуванням (для продакшену) команди запуску
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "eatpan_core.wsgi:application"]

@@ -1,0 +1,10 @@
+.env
+db.sqlite3
+__pycache__/
+*.pyc
+staticfiles/
+clean_data.json
+local_data.json
+error.txt
+chk.txt
+run_err.txt
