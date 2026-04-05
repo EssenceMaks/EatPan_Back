@@ -19,7 +19,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "6600:8000"
     depends_on:
       - valkey_cache
     restart: unless-stopped

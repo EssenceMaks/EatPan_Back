@@ -9,3 +9,4 @@ django-cors-headers>=4.3.1
 python-dotenv>=1.0.0
 dj-database-url>=2.1.0
 whitenoise>=6.6.0
+PyJWT>=2.8.0

@@ -24,6 +24,19 @@ load_dotenv(BASE_DIR / '.env')
 # Quick-start development settings - unsuitable for production
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-kh6&spdc!r9@v3@v7nhi0b3p!w3xj)i%rc795rz_uc)so-0b_@')
+SUPABASE_JWT_SECRET = os.environ.get('SUPABASE_JWT_SECRET')
+
+# REST Framework Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'eatpan_core.authentication.SupabaseJWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ],
+}
 
 # Check if we are running in Render production or local dev
 IS_RENDER = os.environ.get('RENDER', 'False') == 'True'

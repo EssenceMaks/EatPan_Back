@@ -14,18 +14,27 @@ class RecipeBookViewSet(viewsets.ModelViewSet):
         """ Отримати ієрархію всіх Книг -> Груп -> Категорій (Закешовано) """
         return super().list(request, *args, **kwargs)
 
+from rest_framework.decorators import action
+from django.db.models import Q
+from .models import UserProfile
+
 class RecipeViewSet(viewsets.ModelViewSet):
     serializer_class = RecipeSerializer
 
     def get_queryset(self):
-        queryset = Recipe.objects.filter(is_active=True).order_by('-created_at')
+        # Return recipes that are public OR authored by the current user
+        queryset = Recipe.objects.filter(is_active=True)
+        if self.request.user.is_authenticated:
+            queryset = queryset.filter(Q(is_public=True) | Q(author=self.request.user))
+        else:
+            queryset = queryset.filter(is_public=True)
+            
+        queryset = queryset.order_by('-created_at')
         
-        # Реалізуємо фільтрацію, якщо фронтенд клікає на папку в меню
         book = self.request.query_params.get('book')
         group = self.request.query_params.get('group')
         category = self.request.query_params.get('category')
         
-        # Припускаємо, що рецепт зберігає 'books': [], 'group': 'String', 'category': 'String'
         if book:
             queryset = queryset.filter(data__books__contains=[book])
         if group:
@@ -35,12 +44,34 @@ class RecipeViewSet(viewsets.ModelViewSet):
             
         return queryset
 
-    @method_decorator(cache_page(60 * 5))
+    def perform_create(self, serializer):
+        if self.request.user.is_authenticated:
+            # Mark frontend-created recipes as not public initially, and tie to author
+            serializer.save(author=self.request.user, is_public=False)
+        else:
+            serializer.save()
+
+    # @method_decorator(cache_page(60 * 5))
     def list(self, request, *args, **kwargs):
-        """ Отримати список рецептів (з можливою фільтрацією вище) """
+        """ Отримати список рецептів (кешування вимкнено для авторизації) """
         return super().list(request, *args, **kwargs)
 
-    @method_decorator(cache_page(60 * 60))
+    # @method_decorator(cache_page(60 * 60))
     def retrieve(self, request, *args, **kwargs):
         """ Отримати конкретний рецепт по ID """
         return super().retrieve(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'], url_path='toggle_like')
+    def toggle_like(self, request, pk=None):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Unauthorized'}, status=401)
+        recipe = self.get_object()
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        
+        if recipe in profile.liked_recipes.all():
+            profile.liked_recipes.remove(recipe)
+            liked = False
+        else:
+            profile.liked_recipes.add(recipe)
+            liked = True
+        return Response({'liked': liked, 'recipe_id': recipe.id})

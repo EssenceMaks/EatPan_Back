@@ -16,5 +16,9 @@ COPY . /app/
 # Збираємо статику для Render (щоб адмінка працювала в хмарі без Nginx)
 RUN python manage.py collectstatic --noinput
 
+# Створюємо скрипт запуску (entrypoint) для виконання міграцій і старту
+RUN echo '#!/bin/sh\npython manage.py makemigrations\npython manage.py migrate\nexec gunicorn --bind 0.0.0.0:8000 eatpan_core.wsgi:application' > /app/start.sh
+RUN chmod +x /app/start.sh
+
 # За замовчуванням (для продакшену) команди запуску
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "eatpan_core.wsgi:application"]
+CMD ["/app/start.sh"]
