@@ -17,6 +17,16 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             raise exceptions.AuthenticationFailed('SUPABASE_JWT_SECRET is not configured on the backend.')
 
         try:
+            # Якщо секрет є Base64-рядком (як на Render / Supabase Web), декодуємо його
+            import base64
+            # Намагаємося декодувати; якщо це старий звичайний рядок, залишаємо як є
+            try:
+                decoded_secret = base64.b64decode(jwt_secret)
+                if len(decoded_secret) > 0 and '=' in jwt_secret:
+                    jwt_secret = decoded_secret
+            except Exception:
+                pass
+
             # Валідуємо токен за допомогою нашого спільного Supabase JWT Secret
             payload = jwt.decode(
                 token, 
