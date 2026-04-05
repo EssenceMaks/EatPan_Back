@@ -22,8 +22,11 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             try:
                 decoded_secret = base64.b64decode(jwt_secret)
                 payload = jwt.decode(token, decoded_secret, algorithms=['HS256'], options={"verify_aud": False})
+            except jwt.ExpiredSignatureError:
+                # Якщо токен просто прострочився, це означає що сам секрет ПРАВИЛЬНИЙ. Прокидаємо далі.
+                raise
             except Exception:
-                # Спроба 2: Якщо Base64 не спрацював, використовуємо як звичайний рядок (локальний Supabase)
+                # Спроба 2: Якщо Base64 не спрацював або це старий локальний токен, використовуємо як рядок
                 payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             
             # В Supabase ID користувача зберігається у полі 'sub'
