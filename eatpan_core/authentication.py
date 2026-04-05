@@ -29,10 +29,13 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
             # В Supabase ID користувача зберігається у полі 'sub'
             user_id = payload.get('sub')
             email = payload.get('email')
+            
+            # Деякі JWT від Supabase можуть не містити 'role', але мають 'aud' == 'authenticated'
             role = payload.get('role')
-
-            if role != 'authenticated':
-                raise exceptions.AuthenticationFailed('User is not authenticated (invalid role).')
+            aud = payload.get('aud')
+            
+            if role != 'authenticated' and aud != 'authenticated':
+                raise exceptions.AuthenticationFailed(f'User is not authenticated (role={role}, aud={aud}).')
 
             # Ми використовуємо user_id (UUID від Supabase) як username в базі Django
             user, created = User.objects.get_or_create(username=user_id)
@@ -45,7 +48,9 @@ class SupabaseJWTAuthentication(authentication.BaseAuthentication):
 
             return (user, token)
 
-        except jwt.ExpiredSignatureError:
-            raise exceptions.AuthenticationFailed('Токен застарів (Token Expired).')
-        except jwt.InvalidTokenError:
-            raise exceptions.AuthenticationFailed('Невірний або підроблений токен.')
+        except jwt.ExpiredSignatureError as e:
+            raise exceptions.AuthenticationFailed(f'Token Expired: {str(e)}')
+        except jwt.InvalidTokenError as e:
+            raise exceptions.AuthenticationFailed(f'Invalid Token: {str(e)} | Secret length: {len(str(jwt_secret))}')
+        except Exception as e:
+            raise exceptions.AuthenticationFailed(f'Unknown Auth Error: {str(e)}')
