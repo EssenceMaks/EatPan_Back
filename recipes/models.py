@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 class Recipe(models.Model):
@@ -31,6 +33,7 @@ class Recipe(models.Model):
     }
     """
     # Єдина гнучка колонка для зберігання JSON-рецепту (у Postgres конвертується в JSONB)
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     data = models.JSONField(verbose_name="Дані Рецепту (JSONB)", default=dict)
     
     author = models.ForeignKey(
@@ -60,6 +63,7 @@ class UserProfile(models.Model):
     """
     Додатковий профіль користувача для зберігання персональних даних (улюблені рецепти, задачі тощо).
     """
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name="profile", verbose_name="Користувач")
     liked_recipes = models.ManyToManyField(Recipe, blank=True, related_name="liked_by", verbose_name="Улюблені рецепти")
     tasks = models.JSONField(verbose_name="Задачі користувача", default=list, blank=True)
@@ -80,6 +84,7 @@ class RecipeBook(models.Model):
     Модель для зберігання ієрархії (Таксономії) рецептів.
     Книги -> Групи -> Категорії.
     """
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     name = models.CharField(max_length=255, verbose_name="Назва книги", unique=True)
     data = models.JSONField(verbose_name="Структура (Групи, Категорії)", default=dict)
     
@@ -93,4 +98,68 @@ class RecipeBook(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class MediaAsset(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+
+    KIND_IMAGE = 'image'
+    KIND_VIDEO = 'video'
+    KIND_AUDIO = 'audio'
+    KIND_FILE = 'file'
+    KIND_CHOICES = [
+        (KIND_IMAGE, 'Image'),
+        (KIND_VIDEO, 'Video'),
+        (KIND_AUDIO, 'Audio'),
+        (KIND_FILE, 'File'),
+    ]
+
+    SCOPE_LOCAL_ONLY = 'local_only'
+    SCOPE_WEB_OK_SMALL = 'web_ok_small'
+    SCOPE_CHOICES = [
+        (SCOPE_LOCAL_ONLY, 'Local only'),
+        (SCOPE_WEB_OK_SMALL, 'Web ok (small)'),
+    ]
+
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES)
+    scope = models.CharField(max_length=16, choices=SCOPE_CHOICES, default=SCOPE_LOCAL_ONLY)
+
+    url = models.URLField(blank=True, null=True)
+    local_path = models.CharField(max_length=1024, blank=True, null=True)
+    size_bytes = models.BigIntegerField(blank=True, null=True)
+    mime_type = models.CharField(max_length=255, blank=True, null=True)
+    checksum = models.CharField(max_length=128, blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    owner = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='media_assets')
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, null=True, blank=True, related_name='media_assets')
+    profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE, null=True, blank=True, related_name='media_assets')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'media_assets'
+
+    def __str__(self):
+        return f"{self.kind}:{self.uuid}"
+
+
+class SyncOutbox(models.Model):
+    entity_type = models.CharField(max_length=64)
+    entity_uuid = models.UUIDField(db_index=True)
+    op = models.CharField(max_length=16)
+    payload = models.JSONField(default=dict, blank=True)
+    node_id = models.CharField(max_length=64)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    published_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'sync_outbox'
+        indexes = [
+            models.Index(fields=['entity_type', 'published_at', 'created_at']),
+        ]
 

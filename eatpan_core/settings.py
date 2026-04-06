@@ -103,6 +103,10 @@ WSGI_APPLICATION = 'eatpan_core.wsgi.application'
 # Uses dj_database_url to parse DATABASE_URL environment variable
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
+CLOUD_DATABASE_URL = os.environ.get('CLOUD_DATABASE_URL')
+PEER1_DATABASE_URL = os.environ.get('PEER1_DATABASE_URL')
+PEER2_DATABASE_URL = os.environ.get('PEER2_DATABASE_URL')
+PEER3_DATABASE_URL = os.environ.get('PEER3_DATABASE_URL')
 
 if DATABASE_URL:
     DATABASES = {
@@ -124,6 +128,34 @@ else:
             'PORT': '5432',
         }
     }
+
+
+def _add_db(alias: str, url: str | None):
+    if not url:
+        return
+    DATABASES[alias] = dj_database_url.parse(
+        url,
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
+
+
+_add_db('cloud', CLOUD_DATABASE_URL)
+_add_db('peer1', PEER1_DATABASE_URL)
+_add_db('peer2', PEER2_DATABASE_URL)
+_add_db('peer3', PEER3_DATABASE_URL)
+
+SYNC_DB_ALIASES = [alias for alias in ['default', 'peer1', 'peer2', 'peer3', 'cloud'] if alias in DATABASES]
+
+# Node identity for sync metadata
+NODE_ID = os.environ.get('NODE_ID', 'local_a')
+
+
+# NATS JetStream (Sync Broker)
+NATS_URL = os.environ.get('NATS_URL', 'nats://nats:4222')
+NATS_STREAM = os.environ.get('NATS_STREAM', 'eatpan_sync')
+NATS_SUBJECT = os.environ.get('NATS_SUBJECT', 'eatpan.sync')
+NATS_DURABLE = os.environ.get('NATS_DURABLE', f'eatpan_sync_{NODE_ID}')
 
 
 # Password validation
@@ -163,6 +195,9 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
@@ -170,6 +205,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Cache settings using Valkey (Redis compatible)
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://valkey_cache:6379/1')
+
+# Separate Redis/Valkey endpoint for the sync broker (must be shared between nodes).
+# If not provided, falls back to REDIS_URL (single-node dev).
+SYNC_BROKER_REDIS_URL = os.environ.get('SYNC_BROKER_REDIS_URL', REDIS_URL)
 
 if IS_RENDER and not os.environ.get('REDIS_URL'):
     CACHES = {
@@ -185,5 +224,12 @@ else:
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
             }
-        }
+        },
+        "broker": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": SYNC_BROKER_REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            }
+        },
     }

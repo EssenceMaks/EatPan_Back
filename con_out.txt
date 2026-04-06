@@ -1,0 +1,2 @@
+Applied=1, durable=eatpan_sync_local_a, stream=eatpan_sync
+Applied=1, durable=eatpan_sync_local_a, stream=eatpan_sync

@@ -1,0 +1,11 @@
+=== 1. Creating Recipe via API (using internal Test Client) ===
+   Success! HTTP 201 Created. UUID: cf8e8f6f-ddf9-4e6d-89f8-7ae0cd3d6c2e
+
+=== 2. Waiting 2s for NATS Daemons (Publisher & Consumer) ===
+
+=== 3. Validating SyncOutbox (Database Queue) ===
+   Event found! OP: "upsert", Entity Type: "recipe"
+   SUCCESS: Publisher picked it up and pushed to NATS at 2026-04-06 04:51:24.148149+00:00
+
+=== 4. Cleaning up Test Data ===
+   Cleanup done.

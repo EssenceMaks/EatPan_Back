@@ -16,8 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from eatpan_core.health import health
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include('recipes.urls')),
+    path('api/health', health, name='health'),
 ]
