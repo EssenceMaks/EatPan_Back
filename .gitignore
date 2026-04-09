@@ -1,3 +1,7 @@
+# OS
+.DS_Store
+Thumbs.db
+
 .env
 db.sqlite3
 __pycache__/
@@ -8,3 +12,9 @@ local_data.json
 error.txt
 chk.txt
 run_err.txt
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
