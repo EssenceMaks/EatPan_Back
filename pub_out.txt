@@ -1,2 +1,0 @@
-Published=1, failed=0, stream=eatpan_sync, subject=eatpan.sync, node=local_a
-Published=1, failed=0, stream=eatpan_sync, subject=eatpan.sync, node=local_a
