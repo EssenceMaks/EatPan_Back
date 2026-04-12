@@ -14,8 +14,25 @@ from nats.errors import TimeoutError as NatsTimeoutError
 from recipes.models import Recipe, RecipeBook, UserProfile
 
 
+# ---------------------------------------------------------------------------
+# Media-field stripping (cloud targets should not receive binary paths/URLs)
+# ---------------------------------------------------------------------------
+MEDIA_KEYS = frozenset([
+    'photo', 'photo_url', 'video', 'video_url',
+    'audio', 'audio_url', 'media', 'media_url',
+    'attachments', 'files',
+])
+
+
+def _strip_media(data: dict) -> dict:
+    """Return a shallow copy of *data* with media-related keys removed."""
+    if not isinstance(data, dict):
+        return data
+    return {k: v for k, v in data.items() if k not in MEDIA_KEYS}
+
+
 class Command(BaseCommand):
-    help = 'Consume sync events from NATS JetStream and apply them locally (sync worker).'
+    help = 'Consume sync events from NATS JetStream and apply them to ALL target databases (local + cloud).'
 
     def add_arguments(self, parser):
         parser.add_argument('--stream', default=None, help='JetStream stream name (defaults to settings.NATS_STREAM).')
@@ -60,6 +77,13 @@ class Command(BaseCommand):
 
         sub = await js.pull_subscribe(subject, durable=durable, stream=stream)
 
+        # Determine target DB aliases — all configured aliases (including cloud)
+        all_aliases = getattr(settings, 'SYNC_DB_ALIASES', ['default'])
+        targets = [a for a in all_aliases if a != 'default']
+        # Always include 'default' as a target too
+        targets = ['default'] + targets
+        self.stdout.write(f'Sync targets: {targets}')
+
         try:
             while True:
                 applied = 0
@@ -83,12 +107,19 @@ class Command(BaseCommand):
                         entity_uuid = str(data.get('entity_uuid') or '')
                         payload = data.get('payload') or {}
 
-                        if entity_type == 'recipe':
-                            await _apply_recipe(op=op, entity_uuid=entity_uuid, payload=payload)
-                        elif entity_type == 'recipe_book':
-                            await _apply_recipe_book(op=op, entity_uuid=entity_uuid, payload=payload)
-                        elif entity_type == 'user_profile':
-                            await _apply_user_profile(op=op, entity_uuid=entity_uuid, payload=payload)
+                        # Apply to ALL targets (default + cloud + peers)
+                        for db_alias in targets:
+                            is_cloud = db_alias == 'cloud'
+                            try:
+                                if entity_type == 'recipe':
+                                    await _apply_recipe(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias, strip_media=is_cloud)
+                                elif entity_type == 'recipe_book':
+                                    await _apply_recipe_book(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias)
+                                elif entity_type == 'user_profile':
+                                    await _apply_user_profile(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias)
+                            except Exception as e:
+                                # Log but don't block other targets
+                                self.stderr.write(f'  WARN apply {entity_type} to {db_alias}: {e}')
 
                         await msg.ack()
                         applied += 1
@@ -96,7 +127,7 @@ class Command(BaseCommand):
                         # Don't ack on failure to allow redelivery
                         continue
 
-                self.stdout.write(self.style.SUCCESS(f'Applied={applied}, durable={durable}, stream={stream}'))
+                self.stdout.write(self.style.SUCCESS(f'Applied={applied}, targets={targets}, durable={durable}, stream={stream}'))
 
                 if not loop:
                     return
@@ -105,14 +136,18 @@ class Command(BaseCommand):
 
 
 @sync_to_async
-def _apply_recipe(*, op: str, entity_uuid: str, payload: dict) -> None:
+def _apply_recipe(*, op: str, entity_uuid: str, payload: dict, db_alias: str = 'default', strip_media: bool = False) -> None:
     if op == 'delete':
-        Recipe.objects.filter(uuid=entity_uuid).update(is_active=False)
+        Recipe.objects.using(db_alias).filter(uuid=entity_uuid).update(is_active=False)
         return
 
     data = payload.get('data')
     if not isinstance(data, dict):
         return
+
+    # Strip media fields when syncing to cloud (media stays local only)
+    if strip_media:
+        data = _strip_media(data)
 
     defaults = {
         'data': data,
@@ -120,11 +155,11 @@ def _apply_recipe(*, op: str, entity_uuid: str, payload: dict) -> None:
         'is_public': bool(payload.get('is_public', True)),
     }
 
-    Recipe.objects.update_or_create(uuid=entity_uuid, defaults=defaults)
+    Recipe.objects.using(db_alias).update_or_create(uuid=entity_uuid, defaults=defaults)
 
 
 @sync_to_async
-def _apply_user_profile(*, op: str, entity_uuid: str, payload: dict) -> None:
+def _apply_user_profile(*, op: str, entity_uuid: str, payload: dict, db_alias: str = 'default') -> None:
     if op not in ('upsert', 'patch'):
         return
 
@@ -132,7 +167,7 @@ def _apply_user_profile(*, op: str, entity_uuid: str, payload: dict) -> None:
     if 'tasks' in payload:
         tasks = payload.get('tasks')
         if tasks is not None:
-            UserProfile.objects.filter(uuid=entity_uuid).update(tasks=tasks)
+            UserProfile.objects.using(db_alias).filter(uuid=entity_uuid).update(tasks=tasks)
 
     # Patch liked recipes if provided (UUID-based)
     if 'liked_recipe_uuids' in payload:
@@ -140,19 +175,19 @@ def _apply_user_profile(*, op: str, entity_uuid: str, payload: dict) -> None:
         if isinstance(raw, list):
             uuids = [u for u in raw if isinstance(u, str) and u]
             try:
-                profile = UserProfile.objects.filter(uuid=entity_uuid).first()
+                profile = UserProfile.objects.using(db_alias).filter(uuid=entity_uuid).first()
                 if not profile:
                     return
-                liked = Recipe.objects.filter(uuid__in=uuids).only('id')
+                liked = Recipe.objects.using(db_alias).filter(uuid__in=uuids).only('id')
                 profile.liked_recipes.set(liked)
             except Exception:
                 return
 
 
 @sync_to_async
-def _apply_recipe_book(*, op: str, entity_uuid: str, payload: dict) -> None:
+def _apply_recipe_book(*, op: str, entity_uuid: str, payload: dict, db_alias: str = 'default') -> None:
     if op == 'delete':
-        RecipeBook.objects.filter(uuid=entity_uuid).delete()
+        RecipeBook.objects.using(db_alias).filter(uuid=entity_uuid).delete()
         return
 
     name = payload.get('name')
@@ -166,4 +201,4 @@ def _apply_recipe_book(*, op: str, entity_uuid: str, payload: dict) -> None:
         'name': name,
         'data': data or {},
     }
-    RecipeBook.objects.update_or_create(uuid=entity_uuid, defaults=defaults)
+    RecipeBook.objects.using(db_alias).update_or_create(uuid=entity_uuid, defaults=defaults)
