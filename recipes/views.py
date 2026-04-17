@@ -1,12 +1,24 @@
+import os
+import uuid as uuid_mod
+import urllib.request
+import logging
+
 from rest_framework import viewsets
+from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from .models import Recipe, RecipeBook
+from .models import Recipe, RecipeBook, MediaAsset
 from .serializers import RecipeSerializer, RecipeBookSerializer
 from .sync_outbox import outbox_enqueue
 
+from rest_framework.permissions import AllowAny
+
+logger = logging.getLogger(__name__)
+
 class RecipeBookViewSet(viewsets.ModelViewSet):
+    permission_classes = [AllowAny]
     queryset = RecipeBook.objects.all().order_by('id')
     serializer_class = RecipeBookSerializer
 
@@ -56,6 +68,7 @@ from django.db.models import Q
 from .models import UserProfile
 
 class RecipeViewSet(viewsets.ModelViewSet):
+    permission_classes = [AllowAny]
     serializer_class = RecipeSerializer
 
     def get_queryset(self):
@@ -83,10 +96,20 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         if self.request.user.is_authenticated:
-            # Mark frontend-created recipes as not public initially, and tie to author
             obj = serializer.save(author=self.request.user, is_public=False)
         else:
             obj = serializer.save()
+
+        # Auto-link orphan MediaAssets by UUID from data.media.images
+        media_uuids = (obj.data or {}).get('media', {}).get('images', [])
+        if media_uuids:
+            # Filter only valid UUIDs (not URLs)
+            valid_uuids = [u for u in media_uuids if not str(u).startswith('http')]
+            if valid_uuids:
+                linked = MediaAsset.objects.filter(
+                    uuid__in=valid_uuids, recipe__isnull=True
+                ).update(recipe=obj)
+                logger.info(f'Auto-linked {linked} MediaAssets to recipe {obj.id}')
 
         outbox_enqueue(
             entity_type='recipe',
@@ -158,3 +181,125 @@ class RecipeViewSet(viewsets.ModelViewSet):
             },
         )
         return Response({'liked': liked, 'recipe_id': recipe.id})
+
+from .models import RecipeCategory, UserRecipeState, RecipeComment, RecipeReaction, CommentReaction
+from .serializers import RecipeCategorySerializer, UserRecipeStateSerializer, RecipeCommentSerializer, RecipeReactionSerializer, CommentReactionSerializer
+
+class RecipeCategoryViewSet(viewsets.ModelViewSet):
+    permission_classes = [AllowAny]
+    queryset = RecipeCategory.objects.all().order_by('id')
+    serializer_class = RecipeCategorySerializer
+
+class UserRecipeStateViewSet(viewsets.ModelViewSet):
+    permission_classes = [AllowAny]
+    queryset = UserRecipeState.objects.all()
+    serializer_class = UserRecipeStateSerializer
+
+class RecipeCommentViewSet(viewsets.ModelViewSet):
+    queryset = RecipeComment.objects.all().order_by('-created_at')
+    serializer_class = RecipeCommentSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+
+class RecipeReactionViewSet(viewsets.ModelViewSet):
+    queryset = RecipeReaction.objects.all()
+    serializer_class = RecipeReactionSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class CommentReactionViewSet(viewsets.ModelViewSet):
+    queryset = CommentReaction.objects.all()
+    serializer_class = CommentReactionSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class MediaUploadView(APIView):
+    """
+    Приймає файл від фронтенда, перенаправляє в Local Supabase Storage
+    (контейнер supabase-storage через kong:8000), створює запис MediaAsset.
+    
+    POST /api/v1/media/upload/
+    Body: multipart/form-data with 'file' field
+    Optional: 'recipe_id' to link to existing recipe
+    Returns: { uuid, url }
+    """
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        recipe_id = request.data.get('recipe_id')
+
+        if not file:
+            return Response({'error': 'No file provided'}, status=400)
+
+        asset_uuid = uuid_mod.uuid4()
+        clean_name = file.name or 'image.jpg'
+        storage_path = f"study/recipes/{asset_uuid}/{clean_name}"
+
+        # Read env vars for local Supabase Storage connection
+        supabase_url = os.environ.get('SUPABASE_URL', 'http://kong:8000').rstrip('/')
+        public_url_base = os.environ.get('SUPABASE_PUBLIC_URL', 'http://localhost:6500').rstrip('/')
+        service_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
+        bucket = os.environ.get('SUPABASE_MEDIA_BUCKET', 'id_eatpan_media')
+
+        if not service_key:
+            return Response({'error': 'Storage not configured (missing SUPABASE_SERVICE_ROLE_KEY)'}, status=500)
+
+        # Read file bytes
+        file_bytes = file.read()
+
+        # Forward to Local Supabase Storage via REST API
+        upload_url = f"{supabase_url}/storage/v1/object/{bucket}/{storage_path}"
+        try:
+            req = urllib.request.Request(
+                upload_url,
+                data=file_bytes,
+                method='PUT',
+                headers={
+                    'Authorization': f'Bearer {service_key}',
+                    'apikey': service_key,
+                    'Content-Type': file.content_type or 'application/octet-stream',
+                    'x-upsert': 'true',
+                },
+            )
+            urllib.request.urlopen(req, timeout=60)
+        except Exception as e:
+            logger.error(f'Failed to upload to Supabase Storage: {e}')
+            return Response({'error': f'Storage upload failed: {str(e)}'}, status=502)
+
+        # Build public URL (for local access via localhost:6500)
+        public_url = f"{public_url_base}/storage/v1/object/public/{bucket}/{storage_path}"
+
+        # Optionally link to recipe
+        recipe = None
+        if recipe_id:
+            recipe = Recipe.objects.filter(id=recipe_id).first()
+
+        # Create MediaAsset record in PostgreSQL
+        asset = MediaAsset.objects.create(
+            uuid=asset_uuid,
+            kind=MediaAsset.KIND_IMAGE,
+            scope=MediaAsset.SCOPE_LOCAL_ONLY,
+            url=public_url,
+            size_bytes=len(file_bytes),
+            mime_type=file.content_type,
+            metadata={
+                'storage_bucket': bucket,
+                'storage_path': storage_path,
+                'original_name': clean_name,
+            },
+            recipe=recipe,
+            owner=request.user if request.user.is_authenticated else None,
+        )
+
+        logger.info(f'MediaAsset created: uuid={asset.uuid}, path={storage_path}, size={len(file_bytes)}')
+
+        return Response({
+            'uuid': str(asset.uuid),
+            'url': public_url,
+        }, status=201)
