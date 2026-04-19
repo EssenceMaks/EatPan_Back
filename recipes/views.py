@@ -21,6 +21,7 @@ class RecipeBookViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     queryset = RecipeBook.objects.all().order_by('id')
     serializer_class = RecipeBookSerializer
+    pagination_class = None
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -69,7 +70,12 @@ from .models import UserProfile
 
 class RecipeViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
-    serializer_class = RecipeSerializer
+    
+    def get_serializer_class(self):
+        if self.action == 'list' and self.request.query_params.get('fields') == 'light':
+            from .serializers import RecipeListSerializer
+            return RecipeListSerializer
+        return RecipeSerializer
 
     def get_queryset(self):
         # Return recipes that are public OR authored by the current user
@@ -90,7 +96,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
         if group:
             queryset = queryset.filter(data__group=group)
         if category:
-            queryset = queryset.filter(data__category=category)
+            # Check both legacy string 'category' and new array 'categories'
+            queryset = queryset.filter(Q(data__category=category) | Q(data__categories__contains=[category]))
             
         return queryset
 
@@ -147,9 +154,11 @@ class RecipeViewSet(viewsets.ModelViewSet):
             payload={'uuid': str(u)},
         )
 
-    # @method_decorator(cache_page(60 * 5))
+    from django.views.decorators.vary import vary_on_headers
+    @method_decorator(cache_page(60 * 5))
+    @method_decorator(vary_on_headers('Authorization', 'Cookie'))
     def list(self, request, *args, **kwargs):
-        """ Отримати список рецептів (кешування вимкнено для авторизації) """
+        """ Отримати список рецептів (кешування увімкнено) """
         return super().list(request, *args, **kwargs)
 
     # @method_decorator(cache_page(60 * 60))
@@ -191,6 +200,7 @@ class RecipeCategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     queryset = RecipeCategory.objects.all().order_by('id')
     serializer_class = RecipeCategorySerializer
+    pagination_class = None
 
     def perform_create(self, serializer):
         instance = serializer.save()
