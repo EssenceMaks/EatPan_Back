@@ -49,6 +49,9 @@ class Recipe(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата створення")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата оновлення")
     is_active = models.BooleanField(default=True, verbose_name="Активний")
+    
+    repost_count = models.IntegerField(default=0, verbose_name="Кількість репостів")
+    share_count = models.IntegerField(default=0, verbose_name="Кількість відправок")
 
     class Meta:
         db_table = "recipes"
@@ -144,6 +147,82 @@ class MediaAsset(models.Model):
     def __str__(self):
         return f"{self.kind}:{self.uuid}"
 
+class RecipeCategory(models.Model):
+    """
+    Гнучка модель для зберігання Категорій та їх налаштувань.
+    Використовує JSONField для імені, іконки, кольору та інших властивостей.
+    """
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    data = models.JSONField(verbose_name="Дані категорії (JSONB)", default=dict)
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата створення")
+
+    class Meta:
+        db_table = "recipe_categories"
+        verbose_name = "Категорія"
+        verbose_name_plural = "Категорії"
+
+    def __str__(self):
+        return self.data.get("name", f"Категорія #{self.id}")
+
+class UserRecipeState(models.Model):
+    """Відстеження взаємодії користувача з рецептом (Сплановано, Приготовлено тощо)."""
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name="recipe_states")
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="user_states")
+    
+    is_planned = models.BooleanField(default=False, verbose_name="Сплановано")
+    is_cooked = models.BooleanField(default=False, verbose_name="Приготовлено")
+    cooked_date = models.DateTimeField(null=True, blank=True, verbose_name="Дата приготування")
+    expiration_date = models.DateTimeField(null=True, blank=True, verbose_name="Строк придатності")
+    
+    location = models.CharField(max_length=255, blank=True, verbose_name="Локація (Холодильник, шафа)")
+    cook_count = models.IntegerField(default=0, verbose_name="Кількість приготувань юзером")
+    personal_digestion_time = models.CharField(max_length=100, blank=True, verbose_name="Час засвоювання (особистий)")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "user_recipe_states"
+        unique_together = ('user', 'recipe')
+
+class RecipeComment(models.Model):
+    """Коментарі до рецепту"""
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name="recipe_comments")
+    text = models.TextField(verbose_name="Текст коментаря")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "recipe_comments"
+        ordering = ['-created_at']
+
+class RecipeReaction(models.Model):
+    """Додаткові емодзі-реакції на Рецепт (крім стандартного лайку)"""
+    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="reactions")
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name="recipe_reactions")
+    emoji_type = models.CharField(max_length=50, verbose_name="Тип емодзі (напр. fire, star)")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "recipe_reactions"
+        unique_together = ('recipe', 'user', 'emoji_type')
+
+class CommentReaction(models.Model):
+    """Емодзі-реакції на Коментар"""
+    comment = models.ForeignKey(RecipeComment, on_delete=models.CASCADE, related_name="reactions")
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name="comment_reactions")
+    emoji_type = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "comment_reactions"
+        unique_together = ('comment', 'user', 'emoji_type')
+
+
 
 class SyncOutbox(models.Model):
     entity_type = models.CharField(max_length=64)
@@ -162,4 +241,7 @@ class SyncOutbox(models.Model):
         indexes = [
             models.Index(fields=['entity_type', 'published_at', 'created_at']),
         ]
+
+    def __str__(self):
+        return f"Outbox #{self.id} [{self.entity_type}:{self.op}]"
 

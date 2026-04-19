@@ -185,36 +185,195 @@ class RecipeViewSet(viewsets.ModelViewSet):
 from .models import RecipeCategory, UserRecipeState, RecipeComment, RecipeReaction, CommentReaction
 from .serializers import RecipeCategorySerializer, UserRecipeStateSerializer, RecipeCommentSerializer, RecipeReactionSerializer, CommentReactionSerializer
 
+import uuid
+
 class RecipeCategoryViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     queryset = RecipeCategory.objects.all().order_by('id')
     serializer_class = RecipeCategorySerializer
+
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        outbox_enqueue(
+            entity_type='recipe_category',
+            entity_uuid=instance.uuid,
+            op='upsert',
+            payload={'data': instance.data},
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        outbox_enqueue(
+            entity_type='recipe_category',
+            entity_uuid=instance.uuid,
+            op='upsert',
+            payload={'data': instance.data},
+        )
+
+    def perform_destroy(self, instance):
+        outbox_enqueue(
+            entity_type='recipe_category',
+            entity_uuid=instance.uuid,
+            op='delete',
+            payload={},
+        )
+        instance.delete()
 
 class UserRecipeStateViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     queryset = UserRecipeState.objects.all()
     serializer_class = UserRecipeStateSerializer
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        outbox_enqueue(
+            entity_type='user_recipe_state',
+            entity_uuid=instance.uuid,
+            op='upsert',
+            payload={
+                'user_id': instance.user_id,
+                'recipe_uuid': str(instance.recipe.uuid),
+                'is_planned': instance.is_planned,
+                'is_cooked': instance.is_cooked,
+                'cooked_date': instance.cooked_date.isoformat() if instance.cooked_date else None,
+                'expiration_date': instance.expiration_date.isoformat() if instance.expiration_date else None,
+                'location': instance.location,
+                'cook_count': instance.cook_count,
+                'personal_digestion_time': instance.personal_digestion_time,
+            },
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        outbox_enqueue(
+            entity_type='user_recipe_state',
+            entity_uuid=instance.uuid,
+            op='upsert',
+            payload={
+                'user_id': instance.user_id,
+                'recipe_uuid': str(instance.recipe.uuid),
+                'is_planned': instance.is_planned,
+                'is_cooked': instance.is_cooked,
+                'cooked_date': instance.cooked_date.isoformat() if instance.cooked_date else None,
+                'expiration_date': instance.expiration_date.isoformat() if instance.expiration_date else None,
+                'location': instance.location,
+                'cook_count': instance.cook_count,
+                'personal_digestion_time': instance.personal_digestion_time,
+            },
+        )
+
+    def perform_destroy(self, instance):
+        outbox_enqueue(
+            entity_type='user_recipe_state',
+            entity_uuid=instance.uuid,
+            op='delete',
+            payload={'user_id': instance.user_id, 'recipe_uuid': str(instance.recipe.uuid)},
+        )
+        instance.delete()
+
 class RecipeCommentViewSet(viewsets.ModelViewSet):
     queryset = RecipeComment.objects.all().order_by('-created_at')
     serializer_class = RecipeCommentSerializer
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        instance = serializer.save(author=self.request.user)
+        outbox_enqueue(
+            entity_type='recipe_comment',
+            entity_uuid=instance.uuid,
+            op='upsert',
+            payload={
+                'author_id': instance.author_id,
+                'recipe_uuid': str(instance.recipe.uuid),
+                'text': instance.text,
+            },
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        outbox_enqueue(
+            entity_type='recipe_comment',
+            entity_uuid=instance.uuid,
+            op='upsert',
+            payload={
+                'author_id': instance.author_id,
+                'recipe_uuid': str(instance.recipe.uuid),
+                'text': instance.text,
+            },
+        )
+
+    def perform_destroy(self, instance):
+        outbox_enqueue(
+            entity_type='recipe_comment',
+            entity_uuid=instance.uuid,
+            op='delete',
+            payload={'author_id': instance.author_id, 'recipe_uuid': str(instance.recipe.uuid)},
+        )
+        instance.delete()
 
 class RecipeReactionViewSet(viewsets.ModelViewSet):
     queryset = RecipeReaction.objects.all()
     serializer_class = RecipeReactionSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        instance = serializer.save(user=self.request.user)
+        # Generate consistent UUID for outbox
+        virtual_uuid = uuid.uuid5(uuid.NAMESPACE_OID, f"rec_react_{instance.recipe.id}_{instance.user.id}_{instance.emoji_type}")
+        outbox_enqueue(
+            entity_type='recipe_reaction',
+            entity_uuid=virtual_uuid,
+            op='upsert',
+            payload={
+                'user_id': instance.user_id,
+                'recipe_uuid': str(instance.recipe.uuid),
+                'emoji_type': instance.emoji_type,
+            },
+        )
+
+    def perform_destroy(self, instance):
+        virtual_uuid = uuid.uuid5(uuid.NAMESPACE_OID, f"rec_react_{instance.recipe.id}_{instance.user.id}_{instance.emoji_type}")
+        outbox_enqueue(
+            entity_type='recipe_reaction',
+            entity_uuid=virtual_uuid,
+            op='delete',
+            payload={
+                'user_id': instance.user_id,
+                'recipe_uuid': str(instance.recipe.uuid),
+                'emoji_type': instance.emoji_type,
+            },
+        )
+        instance.delete()
 
 class CommentReactionViewSet(viewsets.ModelViewSet):
     queryset = CommentReaction.objects.all()
     serializer_class = CommentReactionSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        instance = serializer.save(user=self.request.user)
+        virtual_uuid = uuid.uuid5(uuid.NAMESPACE_OID, f"com_react_{instance.comment.id}_{instance.user.id}_{instance.emoji_type}")
+        outbox_enqueue(
+            entity_type='comment_reaction',
+            entity_uuid=virtual_uuid,
+            op='upsert',
+            payload={
+                'user_id': instance.user_id,
+                'comment_uuid': str(instance.comment.uuid),
+                'emoji_type': instance.emoji_type,
+            },
+        )
+
+    def perform_destroy(self, instance):
+        virtual_uuid = uuid.uuid5(uuid.NAMESPACE_OID, f"com_react_{instance.comment.id}_{instance.user.id}_{instance.emoji_type}")
+        outbox_enqueue(
+            entity_type='comment_reaction',
+            entity_uuid=virtual_uuid,
+            op='delete',
+            payload={
+                'user_id': instance.user_id,
+                'comment_uuid': str(instance.comment.uuid),
+                'emoji_type': instance.emoji_type,
+            },
+        )
+        instance.delete()
 
 
 class MediaUploadView(APIView):

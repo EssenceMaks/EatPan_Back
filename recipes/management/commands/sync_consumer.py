@@ -23,6 +23,12 @@ MEDIA_KEYS = frozenset([
     'attachments', 'files',
 ])
 
+from recipes.models import (
+    Recipe, RecipeBook, UserProfile,
+    RecipeCategory, UserRecipeState, RecipeComment,
+    RecipeReaction, CommentReaction
+)
+
 
 def _strip_media(data: dict) -> dict:
     """Return a shallow copy of *data* with media-related keys removed."""
@@ -117,6 +123,16 @@ class Command(BaseCommand):
                                     await _apply_recipe_book(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias)
                                 elif entity_type == 'user_profile':
                                     await _apply_user_profile(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias)
+                                elif entity_type == 'recipe_category':
+                                    await _apply_recipe_category(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias)
+                                elif entity_type == 'user_recipe_state':
+                                    await _apply_user_recipe_state(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias)
+                                elif entity_type == 'recipe_comment':
+                                    await _apply_recipe_comment(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias)
+                                elif entity_type == 'recipe_reaction':
+                                    await _apply_recipe_reaction(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias)
+                                elif entity_type == 'comment_reaction':
+                                    await _apply_comment_reaction(op=op, entity_uuid=entity_uuid, payload=payload, db_alias=db_alias)
                             except Exception as e:
                                 # Log but don't block other targets
                                 self.stderr.write(f'  WARN apply {entity_type} to {db_alias}: {e}')
@@ -202,3 +218,123 @@ def _apply_recipe_book(*, op: str, entity_uuid: str, payload: dict, db_alias: st
         'data': data or {},
     }
     RecipeBook.objects.using(db_alias).update_or_create(uuid=entity_uuid, defaults=defaults)
+
+
+@sync_to_async
+def _apply_recipe_category(*, op: str, entity_uuid: str, payload: dict, db_alias: str = 'default') -> None:
+    if op == 'delete':
+        RecipeCategory.objects.using(db_alias).filter(uuid=entity_uuid).delete()
+        return
+    data = payload.get('data')
+    if not isinstance(data, dict):
+        return
+    defaults = {
+        'data': data
+    }
+    RecipeCategory.objects.using(db_alias).update_or_create(uuid=entity_uuid, defaults=defaults)
+
+
+@sync_to_async
+def _apply_user_recipe_state(*, op: str, entity_uuid: str, payload: dict, db_alias: str = 'default') -> None:
+    if op == 'delete':
+        UserRecipeState.objects.using(db_alias).filter(uuid=entity_uuid).delete()
+        return
+
+    recipe_uuid = payload.get('recipe_uuid')
+    user_id = payload.get('user_id')
+
+    if not recipe_uuid or not user_id:
+        return
+
+    recipe = Recipe.objects.using(db_alias).filter(uuid=recipe_uuid).only('id').first()
+    if not recipe:
+        return
+
+    defaults = {
+        'user_id': user_id,
+        'recipe_id': recipe.id,
+        'is_planned': bool(payload.get('is_planned')),
+        'is_cooked': bool(payload.get('is_cooked')),
+        'cooked_date': payload.get('cooked_date'),
+        'expiration_date': payload.get('expiration_date'),
+        'location': payload.get('location', ''),
+        'cook_count': int(payload.get('cook_count', 0)),
+        'personal_digestion_time': payload.get('personal_digestion_time', ''),
+    }
+    UserRecipeState.objects.using(db_alias).update_or_create(uuid=entity_uuid, defaults=defaults)
+
+
+@sync_to_async
+def _apply_recipe_comment(*, op: str, entity_uuid: str, payload: dict, db_alias: str = 'default') -> None:
+    if op == 'delete':
+        RecipeComment.objects.using(db_alias).filter(uuid=entity_uuid).delete()
+        return
+
+    recipe_uuid = payload.get('recipe_uuid')
+    author_id = payload.get('author_id')
+    text = payload.get('text')
+
+    if not recipe_uuid or not author_id or not text:
+        return
+
+    recipe = Recipe.objects.using(db_alias).filter(uuid=recipe_uuid).only('id').first()
+    if not recipe:
+        return
+
+    defaults = {
+        'recipe_id': recipe.id,
+        'author_id': author_id,
+        'text': text,
+    }
+    RecipeComment.objects.using(db_alias).update_or_create(uuid=entity_uuid, defaults=defaults)
+
+
+@sync_to_async
+def _apply_recipe_reaction(*, op: str, entity_uuid: str, payload: dict, db_alias: str = 'default') -> None:
+    recipe_uuid = payload.get('recipe_uuid')
+    user_id = payload.get('user_id')
+    emoji_type = payload.get('emoji_type')
+
+    if not recipe_uuid or not user_id or not emoji_type:
+        return
+
+    recipe = Recipe.objects.using(db_alias).filter(uuid=recipe_uuid).only('id').first()
+    if not recipe:
+        return
+
+    if op == 'delete':
+        RecipeReaction.objects.using(db_alias).filter(recipe_id=recipe.id, user_id=user_id, emoji_type=emoji_type).delete()
+        return
+
+    # Reactions don't have UUIDs, so we use update_or_create by their unique together fields
+    defaults = {
+        'recipe_id': recipe.id,
+        'user_id': user_id,
+        'emoji_type': emoji_type,
+    }
+    RecipeReaction.objects.using(db_alias).get_or_create(recipe_id=recipe.id, user_id=user_id, emoji_type=emoji_type, defaults=defaults)
+
+
+@sync_to_async
+def _apply_comment_reaction(*, op: str, entity_uuid: str, payload: dict, db_alias: str = 'default') -> None:
+    comment_uuid = payload.get('comment_uuid')
+    user_id = payload.get('user_id')
+    emoji_type = payload.get('emoji_type')
+
+    if not comment_uuid or not user_id or not emoji_type:
+        return
+
+    comment = RecipeComment.objects.using(db_alias).filter(uuid=comment_uuid).only('id').first()
+    if not comment:
+        return
+
+    if op == 'delete':
+        CommentReaction.objects.using(db_alias).filter(comment_id=comment.id, user_id=user_id, emoji_type=emoji_type).delete()
+        return
+
+    defaults = {
+        'comment_id': comment.id,
+        'user_id': user_id,
+        'emoji_type': emoji_type,
+    }
+    CommentReaction.objects.using(db_alias).get_or_create(comment_id=comment.id, user_id=user_id, emoji_type=emoji_type, defaults=defaults)
