@@ -17,10 +17,22 @@ Schema of UserProfile.tasks:
             "group": "<group_uuid>",
             "status": "todo|in_progress|done",
             "priority": 1,
-            "due_date": "...",
-            "comments": [
-                {"id": "<cid>", "author_uuid": "...", "text": "...", "created_at": "..."}
-            ],
+            "due_date": "YYYY-MM-DD",
+            "type": "work|food|sleep|...",
+            "subtype": "shop_big|party_cafe|...",
+            "quadrant": "urgent_important|important|urgent|neither|null",
+            "lane": 0,
+            "energy_start": 50,
+            "energy_end": 50,
+            "effect_duration": 60,
+            "mental_cost": {"value": 0, "percent": 0, "unit": "focus_points"},
+            "physical_cost": {"value": 0, "percent": 0, "unit": "kcal"},
+            "mental_recovery": {"value": 0, "percent": 0, "unit": "focus_points"},
+            "physical_recovery": {"value": 0, "percent": 0, "unit": "kcal"},
+            "assigned_to": "<user_uuid>|null",
+            "recipe_uuid": "<recipe_uuid>|null",
+            "shopping_list_uuid": "<list_uuid>|null",
+            "comments": [...],
             "created_at": "...", "updated_at": "..."
         }
     }
@@ -101,6 +113,21 @@ class TaskListView(APIView):
             'completed': request.data.get('completed', False),
             'archived': request.data.get('archived', False),
             'media_assets': request.data.get('media_assets', []),
+            # Phase 14: Task typing & biohacking
+            'type': request.data.get('type', ''),
+            'subtype': request.data.get('subtype', ''),
+            'quadrant': request.data.get('quadrant', None),
+            'lane': request.data.get('lane', 0),
+            'energy_start': request.data.get('energy_start', 50),
+            'energy_end': request.data.get('energy_end', 50),
+            'effect_duration': request.data.get('effect_duration', 0),
+            'mental_cost': request.data.get('mental_cost', {'value': 0, 'percent': 0, 'unit': 'focus_points'}),
+            'physical_cost': request.data.get('physical_cost', {'value': 0, 'percent': 0, 'unit': 'kcal'}),
+            'mental_recovery': request.data.get('mental_recovery', {'value': 0, 'percent': 0, 'unit': 'focus_points'}),
+            'physical_recovery': request.data.get('physical_recovery', {'value': 0, 'percent': 0, 'unit': 'kcal'}),
+            'assigned_to': request.data.get('assigned_to', None),
+            'recipe_uuid': request.data.get('recipe_uuid', None),
+            'shopping_list_uuid': request.data.get('shopping_list_uuid', None),
             'comments': [],
             'created_at': now,
             'updated_at': now,
@@ -128,7 +155,16 @@ class TaskDetailView(APIView):
         if not task:
             return Response({'error': 'Task not found'}, status=404)
 
-        for key in ['title', 'description', 'group', 'status', 'priority', 'due_date', 'hour', 'startM', 'durH', 'durM', 'color', 'completed', 'archived', 'media_assets']:
+        ALLOWED_KEYS = [
+            'title', 'description', 'group', 'status', 'priority', 'due_date',
+            'hour', 'startM', 'durH', 'durM', 'color', 'completed', 'archived', 'media_assets',
+            # Phase 14: typing & biohacking
+            'type', 'subtype', 'quadrant', 'lane',
+            'energy_start', 'energy_end', 'effect_duration',
+            'mental_cost', 'physical_cost', 'mental_recovery', 'physical_recovery',
+            'assigned_to', 'recipe_uuid', 'shopping_list_uuid',
+        ]
+        for key in ALLOWED_KEYS:
             if key in request.data:
                 task[key] = request.data[key]
         task['updated_at'] = datetime.utcnow().isoformat()

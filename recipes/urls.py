@@ -14,6 +14,12 @@ from .views_tasks import (
     TaskGroupListView, TaskGroupDetailView, TaskGroupShareView,
 )
 
+# Phase 14: Task Types
+from .views_task_types import (
+    TaskTypeListView, TaskTypeDetailView,
+    TaskSubtypeCreateView, TaskSubtypeDetailView,
+)
+
 # Phase 5: Meal Plan
 from .views_meal_plan import (
     MealPlanListView, MealPlanDetailView,
@@ -94,6 +100,12 @@ urlpatterns = [
     path('task-groups/', TaskGroupListView.as_view(), name='taskgroup-list'),
     path('task-groups/<str:group_uuid>/', TaskGroupDetailView.as_view(), name='taskgroup-detail'),
     path('task-groups/<str:group_uuid>/share/', TaskGroupShareView.as_view(), name='taskgroup-share'),
+
+    # Phase 14: Task Types & Subtypes
+    path('task-types/', TaskTypeListView.as_view(), name='tasktype-list'),
+    path('task-types/<str:type_uuid>/', TaskTypeDetailView.as_view(), name='tasktype-detail'),
+    path('task-types/<str:type_uuid>/subtypes/', TaskSubtypeCreateView.as_view(), name='tasksubtype-create'),
+    path('task-subtypes/<str:subtype_uuid>/', TaskSubtypeDetailView.as_view(), name='tasksubtype-detail'),
 
     # ============================================================
     # Phase 5: Meal Plan
