@@ -60,9 +60,8 @@ class RecipeBookViewSet(viewsets.ModelViewSet):
             payload={'uuid': str(u)},
         )
 
-    @method_decorator(cache_page(60 * 15))
     def list(self, request, *args, **kwargs):
-        """ Отримати ієрархію всіх Книг -> Груп -> Категорій (Закешовано) """
+        """ Отримати список рецептів з пагінацією та фільтрацією """
         return super().list(request, *args, **kwargs)
 
 from rest_framework.decorators import action
