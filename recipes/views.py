@@ -79,7 +79,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Return recipes that are public OR authored by the current user
-        queryset = Recipe.objects.filter(is_active=True)
+        queryset = Recipe.objects.filter(is_active=True).prefetch_related('media_assets')
         if self.request.user.is_authenticated:
             queryset = queryset.filter(Q(is_public=True) | Q(author=self.request.user))
         else:

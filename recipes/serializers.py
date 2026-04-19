@@ -124,5 +124,19 @@ class RecipeListSerializer(serializers.ModelSerializer):
         if not isinstance(obj.data, dict):
             return None
         images = obj.data.get('media', {}).get('images', [])
-        return images[0] if images else None
+        image_ref = images[0] if images else None
+        
+        if not image_ref:
+            # Fallback legacy fields
+            return obj.data.get('image_url') or obj.data.get('image')
+            
+        if str(image_ref).startswith('http'):
+            return image_ref
+            
+        # It's a UUID, let's find the matching MediaAsset
+        for asset in getattr(obj, 'media_assets_prefetched', obj.media_assets.all()):
+            if str(asset.uuid) == str(image_ref):
+                return asset.url
+                
+        return image_ref
 
