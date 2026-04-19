@@ -94,7 +94,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
         if book:
             queryset = queryset.filter(data__books__contains=[book])
         if group:
-            queryset = queryset.filter(data__group=group)
+            if group == 'Без групи':
+                queryset = queryset.filter(Q(data__books=[]) | Q(data__books__isnull=True))
+            else:
+                queryset = queryset.filter(data__books__contains=[group])
         if category:
             # Check both legacy string 'category' and new array 'categories'
             queryset = queryset.filter(Q(data__category=category) | Q(data__categories__contains=[category]))
