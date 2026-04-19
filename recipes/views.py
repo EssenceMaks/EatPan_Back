@@ -6,6 +6,7 @@ import logging
 from rest_framework import viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from django.http import HttpResponseRedirect
 from rest_framework.parsers import MultiPartParser
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
@@ -475,3 +476,23 @@ class MediaUploadView(APIView):
             'uuid': str(asset.uuid),
             'url': public_url,
         }, status=201)
+
+class MediaResolveView(APIView):
+    """
+    Resolves a media UUID to its actual URL and redirects the client.
+    This allows the frontend to only ever use UUIDs for images, avoiding hardcoded paths.
+    """
+    permission_classes = [AllowAny]
+    
+    def get(self, request, uuid):
+        try:
+            asset = MediaAsset.objects.get(uuid=uuid)
+            
+            # Here we can also dynamically rewrite the URL if needed, 
+            # e.g. using tunnel vs localhost based on request headers,
+            # but for now we just redirect to the stored URL.
+            # The mediaResolver.js on the frontend can also rewrite it.
+            # Actually, the redirect target URL is processed by the browser, so it will hit Supabase directly.
+            return HttpResponseRedirect(asset.url)
+        except MediaAsset.DoesNotExist:
+            return Response({'error': 'Media not found'}, status=404)

@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RecipeViewSet, RecipeBookViewSet, RecipeCategoryViewSet, UserRecipeStateViewSet, RecipeCommentViewSet, RecipeReactionViewSet, CommentReactionViewSet, MediaUploadView
+from .views import RecipeViewSet, RecipeBookViewSet, RecipeCategoryViewSet, UserRecipeStateViewSet, RecipeCommentViewSet, RecipeReactionViewSet, CommentReactionViewSet, MediaUploadView, MediaResolveView
 
 router = DefaultRouter()
 router.register(r'recipes', RecipeViewSet, basename='recipe')
@@ -13,5 +13,6 @@ router.register(r'reactions/comment', CommentReactionViewSet, basename='commentr
 
 urlpatterns = [
     path('media/upload/', MediaUploadView.as_view(), name='media-upload'),
+    path('media/<uuid:uuid>/', MediaResolveView.as_view(), name='media-resolve'),
     path('', include(router.urls)),
 ]
