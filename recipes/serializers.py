@@ -118,7 +118,7 @@ class RecipeListSerializer(serializers.ModelSerializer):
     def get_prep_time(self, obj):
         if not isinstance(obj.data, dict):
             return ''
-        return obj.data.get('time_str', '')
+        return obj.data.get('prep_time', '') or obj.data.get('time_str', '')
 
     def get_image_uuid(self, obj):
         if not isinstance(obj.data, dict):
