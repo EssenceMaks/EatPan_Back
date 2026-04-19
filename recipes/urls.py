@@ -38,6 +38,7 @@ from .views_social import (
     FollowView, FriendView,
     FriendGroupListView, FriendGroupDetailView,
     FollowersListView, FollowingListView,
+    AllUsersView,
 )
 
 # Phase 9: Messages
@@ -133,6 +134,7 @@ urlpatterns = [
     path('social/friend-groups/<str:group_uuid>/', FriendGroupDetailView.as_view(), name='social-friendgroup-detail'),
     path('social/followers/', FollowersListView.as_view(), name='social-followers'),
     path('social/following/', FollowingListView.as_view(), name='social-following'),
+    path('social/all-users/', AllUsersView.as_view(), name='social-all-users'),
 
     # ============================================================
     # Phase 9: Messages

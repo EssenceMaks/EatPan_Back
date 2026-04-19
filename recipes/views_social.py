@@ -314,3 +314,20 @@ class FollowingListView(APIView):
             'following': profile.social.get('following', []),
             'count': len(profile.social.get('following', [])),
         })
+
+class AllUsersView(APIView):
+    """GET /social/all-users/"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profiles = UserProfile.objects.all()
+        result = []
+        for p in profiles:
+            account = p.account or {}
+            result.append({
+                'uuid': str(p.uuid),
+                'display_name': account.get('display_name', p.user.username),
+                'avatar_url': account.get('avatar_url', ''),
+                'tier': account.get('tier', 'Free')
+            })
+        return Response({'users': result})

@@ -93,6 +93,14 @@ class TaskListView(APIView):
             'status': request.data.get('status', 'todo'),
             'priority': request.data.get('priority', 0),
             'due_date': request.data.get('due_date', ''),
+            'hour': request.data.get('hour', 0),
+            'startM': request.data.get('startM', 0),
+            'durH': request.data.get('durH', 1),
+            'durM': request.data.get('durM', 0),
+            'color': request.data.get('color', '#333'),
+            'completed': request.data.get('completed', False),
+            'archived': request.data.get('archived', False),
+            'media_assets': request.data.get('media_assets', []),
             'comments': [],
             'created_at': now,
             'updated_at': now,
@@ -120,7 +128,7 @@ class TaskDetailView(APIView):
         if not task:
             return Response({'error': 'Task not found'}, status=404)
 
-        for key in ['title', 'description', 'group', 'status', 'priority', 'due_date']:
+        for key in ['title', 'description', 'group', 'status', 'priority', 'due_date', 'hour', 'startM', 'durH', 'durM', 'color', 'completed', 'archived', 'media_assets']:
             if key in request.data:
                 task[key] = request.data[key]
         task['updated_at'] = datetime.utcnow().isoformat()
