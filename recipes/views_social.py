@@ -317,16 +317,29 @@ class FollowingListView(APIView):
 
 class AllUsersView(APIView):
     """GET /social/all-users/"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = []  # Public endpoint — показуємо список користувачів
 
     def get(self, request):
-        profiles = UserProfile.objects.all()
+        from django.contrib.auth.models import User
+        # Перебираємо УСІХ Django-юзерів і створюємо профілі якщо нема
+        users = User.objects.all()
         result = []
-        for p in profiles:
-            account = p.account or {}
+        for u in users:
+            # Пропускаємо сервісні акаунти (без email)
+            if not u.email:
+                continue
+            profile, _ = UserProfile.objects.get_or_create(user=u)
+            account = profile.account or {}
+            # Каскадний фоллбек: account.display_name → first+last → email → username
+            display_name = (
+                account.get('display_name')
+                or f"{u.first_name} {u.last_name}".strip()
+                or (u.email.split('@')[0] if u.email else '')
+                or u.username
+            )
             result.append({
-                'uuid': str(p.uuid),
-                'display_name': account.get('display_name', p.user.username),
+                'uuid': str(profile.uuid),
+                'display_name': display_name,
                 'avatar_url': account.get('avatar_url', ''),
                 'tier': account.get('tier', 'Free')
             })
