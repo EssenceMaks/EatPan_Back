@@ -100,8 +100,9 @@ class RecipeViewSet(viewsets.ModelViewSet):
             else:
                 queryset = queryset.filter(data__books__contains=[group])
         if category:
-            # Check both legacy string 'category' and new array 'categories'
-            queryset = queryset.filter(Q(data__category=category) | Q(data__categories__contains=[category]))
+            # Check both legacy string 'category' (which can be comma-separated like "М'ясо, Птиця") 
+            # and new array 'categories'
+            queryset = queryset.filter(Q(data__category__icontains=category) | Q(data__categories__contains=[category]))
             
         return queryset
 
