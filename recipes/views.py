@@ -8,8 +8,6 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.http import HttpResponseRedirect
 from rest_framework.parsers import MultiPartParser
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from .models import Recipe, RecipeBook, MediaAsset
 from .serializers import RecipeSerializer, RecipeBookSerializer
 from .sync_outbox import outbox_enqueue
@@ -158,11 +156,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
             payload={'uuid': str(u)},
         )
 
-    from django.views.decorators.vary import vary_on_headers
-    @method_decorator(cache_page(60 * 5))
-    @method_decorator(vary_on_headers('Authorization', 'Cookie'))
     def list(self, request, *args, **kwargs):
-        """ Отримати список рецептів (кешування увімкнено) """
+        """ Отримати список рецептів з пагінацією та фільтрацією """
         return super().list(request, *args, **kwargs)
 
     # @method_decorator(cache_page(60 * 60))

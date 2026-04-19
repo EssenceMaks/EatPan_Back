@@ -112,13 +112,33 @@ class RecipeListSerializer(serializers.ModelSerializer):
 
     def get_category(self, obj):
         if not isinstance(obj.data, dict):
-            return ''
-        return obj.data.get('category', '') or obj.data.get('categories', [])
+            return []
+        # Prefer the structured 'categories' array (new standard)
+        cats = obj.data.get('categories', [])
+        if isinstance(cats, list) and len(cats) > 0:
+            return cats
+        # Fallback to legacy 'category' string (may be comma-separated)
+        cat = obj.data.get('category', '')
+        if isinstance(cat, str) and cat.strip():
+            # Filter out numeric-only values (likely cooking times stored in wrong field)
+            parts = [p.strip() for p in cat.split(',') if p.strip() and not p.strip().isdigit()]
+            return parts
+        return []
 
     def get_prep_time(self, obj):
         if not isinstance(obj.data, dict):
             return ''
-        return obj.data.get('prep_time', '') or obj.data.get('time_str', '')
+        # Check multiple possible fields for cooking time
+        t = obj.data.get('prep_time', '')
+        if not t:
+            t = obj.data.get('time_str', '')
+        if not t:
+            meta = obj.data.get('metadata', {})
+            if isinstance(meta, dict):
+                minutes = meta.get('cooking_time_minutes')
+                if minutes:
+                    t = str(minutes)
+        return t or ''
 
     def get_image_uuid(self, obj):
         if not isinstance(obj.data, dict):
