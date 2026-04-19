@@ -69,8 +69,16 @@ class UserProfile(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
     user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name="profile", verbose_name="Користувач")
     liked_recipes = models.ManyToManyField(Recipe, blank=True, related_name="liked_by", verbose_name="Улюблені рецепти")
-    tasks = models.JSONField(verbose_name="Задачі користувача", default=list, blank=True)
+    tasks = models.JSONField(verbose_name="Задачі користувача", default=dict, blank=True)
     
+    account = models.JSONField(default=dict, blank=True, verbose_name="Account Settings")
+    meal_plan = models.JSONField(default=dict, blank=True, verbose_name="Meal Plan Data")
+    pantry = models.JSONField(default=dict, blank=True, verbose_name="Pantry Inventory")
+    shopping = models.JSONField(default=dict, blank=True, verbose_name="Shopping Lists")
+    social = models.JSONField(default=dict, blank=True, verbose_name="Social Context")
+    inbox = models.JSONField(default=dict, blank=True, verbose_name="Messages & Notifications")
+    user_data = models.JSONField(default=dict, blank=True, verbose_name="Generic User Data")
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата створення")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата оновлення")
 
@@ -244,4 +252,35 @@ class SyncOutbox(models.Model):
 
     def __str__(self):
         return f"Outbox #{self.id} [{self.entity_type}:{self.op}]"
+
+class PromoCode(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    code = models.CharField(max_length=50, unique=True, db_index=True)
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, related_name='created_promos')
+    discount_pct = models.IntegerField(default=0)
+    
+    PROMO_TYPE_CHOICES = (
+        ('discount', 'Discount'),
+        ('gift', 'Gift'),
+    )
+    promo_type = models.CharField(max_length=20, choices=PROMO_TYPE_CHOICES, default='discount')
+    linked_recipe = models.ForeignKey(Recipe, on_delete=models.SET_NULL, null=True, blank=True)
+    max_uses = models.IntegerField(default=1)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "promo_codes"
+
+class PromoCodeUsage(models.Model):
+    promo_code = models.ForeignKey(PromoCode, on_delete=models.CASCADE, related_name='usages')
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='promo_usages')
+    used_at = models.DateTimeField(auto_now_add=True)
+    gifted_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='gifted_promos')
+    context = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "promo_code_usages"
 

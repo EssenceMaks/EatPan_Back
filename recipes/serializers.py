@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from .models import Recipe, RecipeBook, MediaAsset, RecipeCategory, UserRecipeState, RecipeComment, RecipeReaction, CommentReaction
+from .models import (
+    Recipe, RecipeBook, MediaAsset, RecipeCategory, UserRecipeState,
+    RecipeComment, RecipeReaction, CommentReaction, UserProfile,
+    PromoCode, PromoCodeUsage
+)
 
 
 class MediaAssetSerializer(serializers.ModelSerializer):
@@ -57,3 +61,68 @@ class CommentReactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = CommentReaction
         fields = '__all__'
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    
+    class Meta:
+        model = UserProfile
+        fields = [
+            'uuid', 'username', 'liked_recipes', 'tasks',
+            'account', 'meal_plan', 'pantry', 'shopping',
+            'social', 'inbox', 'user_data', 'created_at', 'updated_at'
+        ]
+
+class PublicProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    
+    class Meta:
+        model = UserProfile
+        fields = ['uuid', 'username', 'account', 'social']
+
+class PromoCodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromoCode
+        fields = '__all__'
+
+class PromoCodeUsageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromoCodeUsage
+        fields = '__all__'
+
+class RecipeListSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for lists to optimize payload size.
+    Extracts essential fields from the 'data' JSONB.
+    """
+    title = serializers.SerializerMethodField()
+    category = serializers.SerializerMethodField()
+    prep_time = serializers.SerializerMethodField()
+    image_uuid = serializers.SerializerMethodField()
+    author_username = serializers.CharField(source='author.username', read_only=True)
+
+    class Meta:
+        model = Recipe
+        fields = ['id', 'uuid', 'title', 'category', 'prep_time', 'image_uuid', 'author_username', 'is_public', 'repost_count', 'share_count']
+
+    def get_title(self, obj):
+        if not isinstance(obj.data, dict):
+            return ''
+        return obj.data.get('title', '')
+
+    def get_category(self, obj):
+        if not isinstance(obj.data, dict):
+            return ''
+        return obj.data.get('category', '') or obj.data.get('categories', [])
+
+    def get_prep_time(self, obj):
+        if not isinstance(obj.data, dict):
+            return ''
+        return obj.data.get('time_str', '')
+
+    def get_image_uuid(self, obj):
+        if not isinstance(obj.data, dict):
+            return None
+        images = obj.data.get('media', {}).get('images', [])
+        return images[0] if images else None
+
