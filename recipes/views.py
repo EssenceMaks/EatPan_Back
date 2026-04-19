@@ -491,8 +491,13 @@ class MediaResolveView(APIView):
             # Here we can also dynamically rewrite the URL if needed, 
             # e.g. using tunnel vs localhost based on request headers,
             # but for now we just redirect to the stored URL.
-            # The mediaResolver.js on the frontend can also rewrite it.
-            # Actually, the redirect target URL is processed by the browser, so it will hit Supabase directly.
-            return HttpResponseRedirect(asset.url)
+            # However, if the stored URL is localhost:6500 and the request comes from the internet,
+            # we should rewrite it to the tunnel:
+            redirect_url = asset.url
+            if 'localhost:6500' in redirect_url:
+                # Rewrite to tunnel so remote team members can access it
+                redirect_url = redirect_url.replace('http://localhost:6500', 'https://supa_media.eatpan.com')
+            
+            return HttpResponseRedirect(redirect_url)
         except MediaAsset.DoesNotExist:
             return Response({'error': 'Media not found'}, status=404)
