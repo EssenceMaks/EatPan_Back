@@ -28,16 +28,32 @@ media/
 *.swo
 
 # AI / Agents
-.agents/
+_agents/
 docs/
+
+# Debug & utility scripts
+check_*.py
+create_test_users.py
+list_cloud_tables.py
+test_upload.py
 scratch_*.py
 
-# Custom App Files
+# Standalone test files (outside tests/ directory)
+e2e_test.py
+integration_test.py
+performance_test.py
+test_suite.bat
+tests_report.md
+
+# Custom App Data Files
 clean_data.json
 local_data.json
 error.txt
 chk.txt
 run_err.txt
+
+# Internal architecture notes
+mission.md
 
 # Testing & Coverage
 .pytest_cache/

@@ -1,1 +1,0 @@
-import django; import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'eatpan_core.settings'); django.setup(); from recipes.models import Recipe; print([r.data.get('category') for r in Recipe.objects.all().order_by('-created_at')[:20]])

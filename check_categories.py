@@ -1,1 +1,0 @@
-import django; import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'eatpan_core.settings'); django.setup(); from recipes.models import RecipeCategory; print([c.data for c in RecipeCategory.objects.all()])
