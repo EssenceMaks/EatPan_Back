@@ -94,6 +94,15 @@ class ShoppingListView(APIView):
        PATCH/DELETE /shopping/lists/{list_uuid}/"""
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, list_uuid=None):
+        if not list_uuid:
+            return Response({'error': 'list_uuid required'}, status=400)
+        profile = _get_shopping(request.user)
+        lst = profile.shopping.get('lists', {}).get(list_uuid)
+        if not lst:
+            return Response({'error': 'List not found'}, status=404)
+        return Response({'uuid': list_uuid, **lst})
+
     def post(self, request):
         profile = _get_shopping(request.user)
         list_uuid = str(uuid_mod.uuid4())
