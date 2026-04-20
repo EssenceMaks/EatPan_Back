@@ -2,11 +2,37 @@
 .DS_Store
 Thumbs.db
 
-.env
-db.sqlite3
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+env/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
 staticfiles/
+media/
+
+# IDEs / Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# AI / Agents
+.agents/
+docs/
+scratch_*.py
+
+# Custom App Files
 clean_data.json
 local_data.json
 error.txt
@@ -18,3 +44,4 @@ run_err.txt
 .coverage
 htmlcov/
 coverage.xml
+*.log
