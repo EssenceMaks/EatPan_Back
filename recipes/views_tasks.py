@@ -91,6 +91,15 @@ class TaskListView(APIView):
     def get(self, request):
         profile = _get_profile(request.user)
         items = profile.tasks.get('items', {})
+        
+        # BUG-3 fix: фильтрация по due_date (если передан query-параметр)
+        due_date_filter = request.query_params.get('due_date', '')
+        if due_date_filter:
+            items = {
+                k: v for k, v in items.items()
+                if v.get('due_date', '') == due_date_filter or not v.get('due_date')
+            }
+        
         return Response({'items': items, 'count': len(items)})
 
     def post(self, request):
