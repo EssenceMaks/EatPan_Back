@@ -25,6 +25,7 @@ from .views_meal_plan import (
     MealPlanListView, MealPlanDetailView,
     MealPlanBindRecipeView, MealPlanUnbindRecipeView,
     MealPlanLabelListView, MealPlanLabelDetailView,
+    MealPlanLocationListView, MealPlanLocationDetailView,
 )
 
 # Phase 6: Pantry
@@ -113,6 +114,8 @@ urlpatterns = [
     path('meal-plan/', MealPlanListView.as_view(), name='mealplan-list'),
     path('meal-plan/labels/', MealPlanLabelListView.as_view(), name='mealplan-label-list'),
     path('meal-plan/labels/<str:label_uuid>/', MealPlanLabelDetailView.as_view(), name='mealplan-label-detail'),
+    path('meal-plan/locations/', MealPlanLocationListView.as_view(), name='mealplan-location-list'),
+    path('meal-plan/locations/<str:loc_uuid>/', MealPlanLocationDetailView.as_view(), name='mealplan-location-detail'),
     path('meal-plan/<str:entry_uuid>/', MealPlanDetailView.as_view(), name='mealplan-detail'),
     path('meal-plan/<str:entry_uuid>/bind-recipe/', MealPlanBindRecipeView.as_view(), name='mealplan-bind'),
     path('meal-plan/<str:entry_uuid>/unbind-recipe/<str:recipe_uuid>/', MealPlanUnbindRecipeView.as_view(), name='mealplan-unbind'),

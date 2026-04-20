@@ -208,6 +208,9 @@ class MealPlanLabelListView(APIView):
             'name': request.data.get('name', 'Label'),
             'color': request.data.get('color', '#888'),
             'icon': request.data.get('icon', 'tag'),
+            'inStock': request.data.get('inStock', True),
+            'recipe_uuid': request.data.get('recipe_uuid', ''),
+            'location_uuid': request.data.get('location_uuid', ''),
         }
         profile.meal_plan['labels'][label_uuid] = label
         _sync_meal_plan(profile)
@@ -224,7 +227,7 @@ class MealPlanLabelDetailView(APIView):
         if not label:
             return Response({'error': 'Label not found'}, status=404)
 
-        for key in ['name', 'color', 'icon']:
+        for key in ['name', 'color', 'icon', 'inStock', 'recipe_uuid', 'location_uuid']:
             if key in request.data:
                 label[key] = request.data[key]
 
@@ -240,5 +243,57 @@ class MealPlanLabelDetailView(APIView):
             for eid, entry in profile.meal_plan.get('entries', {}).items():
                 if entry.get('label') == label_uuid:
                     entry['label'] = ''
+            _sync_meal_plan(profile)
+        return Response(status=204)
+
+class MealPlanLocationListView(APIView):
+    """GET / POST /meal-plan/locations/"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = _get_meal_plan(request.user)
+        locations = profile.meal_plan.get('locations', {})
+        return Response({'locations': locations})
+
+    def post(self, request):
+        profile = _get_meal_plan(request.user)
+        if 'locations' not in profile.meal_plan:
+            profile.meal_plan['locations'] = {}
+        
+        loc_uuid = str(uuid_mod.uuid4())
+        loc = {
+            'name': request.data.get('name', 'Location'),
+        }
+        profile.meal_plan['locations'][loc_uuid] = loc
+        _sync_meal_plan(profile)
+        return Response({'uuid': loc_uuid, **loc}, status=201)
+
+class MealPlanLocationDetailView(APIView):
+    """PATCH / DELETE /meal-plan/locations/{loc_uuid}/"""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, loc_uuid):
+        profile = _get_meal_plan(request.user)
+        loc = profile.meal_plan.get('locations', {}).get(loc_uuid)
+        if not loc:
+            return Response({'error': 'Location not found'}, status=404)
+        
+        if 'name' in request.data:
+            loc['name'] = request.data['name']
+            
+        profile.meal_plan['locations'][loc_uuid] = loc
+        _sync_meal_plan(profile)
+        return Response({'uuid': loc_uuid, **loc})
+
+    def delete(self, request, loc_uuid):
+        profile = _get_meal_plan(request.user)
+        if loc_uuid in profile.meal_plan.get('locations', {}):
+            del profile.meal_plan['locations'][loc_uuid]
+            
+            # Unlink this location from any labels
+            for label_uuid, label in profile.meal_plan.get('labels', {}).items():
+                if label.get('location_uuid') == loc_uuid:
+                    label['location_uuid'] = ''
+                    
             _sync_meal_plan(profile)
         return Response(status=204)

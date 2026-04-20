@@ -165,6 +165,23 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """ Отримати конкретний рецепт по ID """
         return super().retrieve(request, *args, **kwargs)
 
+    @action(detail=False, methods=['get'])
+    def ingredients(self, request):
+        """ Отримати список унікальних інгредієнтів з усіх доступних рецептів """
+        ingredients_set = set()
+        for recipe in self.get_queryset().only('data'):
+            ings = (recipe.data or {}).get('ingredients', [])
+            for ing in ings:
+                name = ing if isinstance(ing, str) else ing.get('name', '')
+                if name:
+                    # Clean up: strip and maybe capitalize first letter
+                    name = name.strip()
+                    if name:
+                        ingredients_set.add(name)
+        
+        # Sort alphabetically
+        return Response({'ingredients': sorted(list(ingredients_set))})
+
     @action(detail=True, methods=['post'], url_path='toggle_like')
     def toggle_like(self, request, pk=None):
         if not request.user.is_authenticated:
