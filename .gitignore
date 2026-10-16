@@ -27,8 +27,7 @@ media/
 *.swp
 *.swo
 
-# AI / Agents
-_agents/
+# Docs
 docs/
 
 # Debug & utility scripts
