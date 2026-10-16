@@ -209,6 +209,8 @@ class ShoppingItemView(APIView):
             'purchased': False,
             'price': request.data.get('price'),
             'notes': request.data.get('notes', ''),
+            'photo_url': request.data.get('photo_url', None),
+            'possible_units': request.data.get('possible_units', []),
             'added_at': datetime.utcnow().isoformat(),
         }
 
@@ -229,7 +231,7 @@ class ShoppingItemView(APIView):
         if not item:
             return Response({'error': 'Item not found'}, status=404)
 
-        for key in ['name', 'quantity', 'unit', 'category', 'purchased', 'price', 'notes']:
+        for key in ['name', 'quantity', 'unit', 'category', 'purchased', 'price', 'notes', 'photo_url', 'possible_units']:
             if key in request.data:
                 item[key] = request.data[key]
 
