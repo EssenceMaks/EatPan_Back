@@ -24,7 +24,9 @@ services:
     container_name: django_api
     # Під час розробки ми використовуємо runserver для гарячого перезавантаження (Hot Reload).
     # На продакшені тут буде команда Gunicorn, винесена в Dockerfile.
-    command: python manage.py runserver 0.0.0.0:8000
+    # wait_for_db: після перезавантаження ПК Docker піднімає supabase-db і django_api одночасно,
+    # і без очікування runserver падає на check_migrations, а контейнер лишається "Up" з мертвим портом 6600.
+    command: sh -c "python manage.py wait_for_db && exec python manage.py runserver 0.0.0.0:8000"
     env_file:
       - .env
     volumes:
