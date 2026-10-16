@@ -62,9 +62,11 @@ class IngredientListView(APIView):
     Query params:
       - search: фільтр по назві (icontains на en + locale)
       - locale: мова перекладу (uk, es, pl, ...)
-      - source: фільтр по джерелу (spoonacular, eatpan)
+      - source: фільтр по джерелу (catalog, eatpan, user)
       - category: фільтр по категорії
-      - limit: кількість (default 50, max 500)
+      - has_photo=1: тільки інгредієнти з фото
+      - fields=light: тільки назва, переклад і фото (індекс фото для фронтенду)
+      - limit: кількість (default 50, max 2000)
       - offset: зсув пагінації
     """
     permission_classes = [AllowAny]
@@ -74,6 +76,8 @@ class IngredientListView(APIView):
         locale = request.query_params.get("locale", "").strip()
         source = request.query_params.get("source", "").strip()
         category = request.query_params.get("category", "").strip()
+        has_photo = request.query_params.get("has_photo", "").strip() in ("1", "true")
+        light = request.query_params.get("fields", "").strip() == "light"
         limit = min(int(request.query_params.get("limit", 50)), 2000)
         offset = int(request.query_params.get("offset", 0))
 
@@ -84,6 +88,8 @@ class IngredientListView(APIView):
             qs = qs.filter(source=source)
         if category:
             qs = qs.filter(category__icontains=category)
+        if has_photo:
+            qs = qs.filter(media__photo__isnull=False).exclude(media__photo=None)
 
         # Search (across English name + ALL locale translations)
         if search:
@@ -97,7 +103,20 @@ class IngredientListView(APIView):
         total = qs.count()
         ingredients = qs.order_by("name")[offset:offset + limit]
 
-        results = [serialize_ingredient(ing, locale) for ing in ingredients]
+        if light:
+            page = list(ingredients)
+            names = {}
+            if locale and locale != "en":
+                names = dict(IngredientTranslation.objects.filter(
+                    ingredient__in=page, locale=locale
+                ).values_list("ingredient_id", "name"))
+            results = [{
+                "name": ing.name,
+                "translated_name": names.get(ing.id),
+                "photo_url": build_photo_url(ing.media),
+            } for ing in page]
+        else:
+            results = [serialize_ingredient(ing, locale) for ing in ingredients]
 
         return Response({
             "count": total,

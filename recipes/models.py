@@ -198,8 +198,8 @@ class Ingredient(models.Model):
     ]
 
     SOURCE_CHOICES = [
-        ('spoonacular', 'Spoonacular'),  # Зі Spoonacular-бази (607 шт, з картинками)
-        ('eatpan', 'EatPan'),            # З рецептів EatPan (377 шт, без картинок)
+        ('catalog', 'Catalog'),          # Базовий каталог інгредієнтів (з картинками)
+        ('eatpan', 'EatPan'),            # З рецептів EatPan
         ('manual', 'Manual'),            # Додано вручну
         ('user', 'User'),                # Створено користувачем
     ]

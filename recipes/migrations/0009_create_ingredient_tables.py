@@ -24,7 +24,7 @@ class Migration(migrations.Migration):
                 ('media', models.JSONField(blank=True, default=dict)),
                 ('name_status', models.CharField(choices=[('canonical', 'Canonical'), ('unverified', 'Unverified')], default='canonical', max_length=20, verbose_name='Статус назви')),
                 ('created_locale', models.CharField(blank=True, max_length=10, null=True, verbose_name='Мова створення')),
-                ('source', models.CharField(choices=[('spoonacular', 'Spoonacular'), ('eatpan', 'EatPan'), ('manual', 'Manual'), ('user', 'User')], default='eatpan', max_length=50)),
+                ('source', models.CharField(choices=[('catalog', 'Catalog'), ('eatpan', 'EatPan'), ('manual', 'Manual'), ('user', 'User')], default='eatpan', max_length=50)),
                 ('source_id', models.IntegerField(blank=True, null=True, verbose_name='Зовнішній ID джерела')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
