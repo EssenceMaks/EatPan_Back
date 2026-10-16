@@ -61,6 +61,11 @@ from .views_promo import (
     PromoCodeUseView, PromoCodeGiftView,
 )
 
+# Phase 11: Ingredients
+from .views_ingredients import (
+    IngredientListView, IngredientDetailView,
+)
+
 
 # ============================================================
 # DRF Router for existing ViewSets
@@ -169,6 +174,12 @@ urlpatterns = [
     path('promo-codes/<str:code>/', PromoCodeDetailView.as_view(), name='promo-detail'),
     path('promo-codes/<str:code>/use/', PromoCodeUseView.as_view(), name='promo-use'),
     path('promo-codes/<str:code>/gift/<str:user_uuid>/', PromoCodeGiftView.as_view(), name='promo-gift'),
+
+    # ============================================================
+    # Phase 11: Ingredients
+    # ============================================================
+    path('ingredients/', IngredientListView.as_view(), name='ingredient-list'),
+    path('ingredients/<uuid:ingredient_uuid>/', IngredientDetailView.as_view(), name='ingredient-detail'),
 
     # ============================================================
     # DRF Router (existing ViewSets)

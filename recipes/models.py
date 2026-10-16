@@ -155,6 +155,125 @@ class MediaAsset(models.Model):
     def __str__(self):
         return f"{self.kind}:{self.uuid}"
 
+class Unit(models.Model):
+    code = models.CharField(max_length=20, unique=True, db_index=True)
+    base_unit = models.CharField(max_length=20, null=True, blank=True)
+    multiplier = models.FloatField(default=1.0)
+    
+    class Meta:
+        db_table = "units"
+
+    def __str__(self):
+        return self.code
+
+
+class UnitTranslation(models.Model):
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name='translations')
+    locale = models.CharField(max_length=10, db_index=True)
+    name = models.CharField(max_length=50)
+    short_name = models.CharField(max_length=10)
+
+    class Meta:
+        db_table = "unit_translations"
+        unique_together = ('unit', 'locale')
+
+    def __str__(self):
+        return f"{self.unit.code} [{self.locale}] -> {self.short_name}"
+
+
+class Ingredient(models.Model):
+    """
+    Центральний реєстр інгредієнтів.
+    Зберігає канонічну англійську назву (lowercase), медіа-шляхи,
+    нутрієнти та маркери статусу для мультимовного UX.
+    Дані живуть у Supabase PostgreSQL, Django керує структурою через ORM.
+    """
+    # Головні мови (is_primary=True в IngredientTranslation):
+    # uk, en, es, pl, de, it, fr, ko, bg, tr, hi, ru
+    PRIMARY_LOCALES = ['uk', 'en', 'es', 'pl', 'de', 'it', 'fr', 'ko', 'bg', 'tr', 'hi', 'ru']
+
+    NAME_STATUS_CHOICES = [
+        ('canonical', 'Canonical'),      # Перевірена англійська назва
+        ('unverified', 'Unverified'),    # Створено користувачем, чекає ревʼю
+    ]
+
+    SOURCE_CHOICES = [
+        ('spoonacular', 'Spoonacular'),  # Зі Spoonacular-бази (607 шт, з картинками)
+        ('eatpan', 'EatPan'),            # З рецептів EatPan (377 шт, без картинок)
+        ('manual', 'Manual'),            # Додано вручну
+        ('user', 'User'),                # Створено користувачем
+    ]
+
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+
+    # Канонічна назва (lowercase English) або тимчасова locale-назва для unverified
+    name = models.CharField(max_length=255, unique=True, db_index=True)
+
+    # Slug для шляхів до медіа в Supabase Storage (garlic, olive-oil)
+    slug = models.SlugField(max_length=255, unique=True, db_index=True)
+
+    category = models.CharField(max_length=255, blank=True, default='')
+    nutrition = models.JSONField(default=dict, blank=True)
+
+    # Медіа — шляхи в Supabase Storage (без повних URL)
+    # Приклад: {"photo": "ingredients/garlic/photo.jpg", "icon": null, "illustration": null}
+    media = models.JSONField(default=dict, blank=True)
+
+    # ── Маркери статусу ──
+    name_status = models.CharField(
+        max_length=20, choices=NAME_STATUS_CHOICES, default='canonical',
+        verbose_name="Статус назви"
+    )
+    # Мова створення (тільки для unverified): 'de', 'pl', 'bg', ... або None
+    created_locale = models.CharField(max_length=10, null=True, blank=True, verbose_name="Мова створення")
+
+    # Джерело запису
+    source = models.CharField(max_length=50, choices=SOURCE_CHOICES, default='eatpan')
+    source_id = models.IntegerField(null=True, blank=True, verbose_name="Зовнішній ID джерела")
+
+    possible_units = models.JSONField(default=list, blank=True, verbose_name="Можливі одиниці вимірювання")
+    market_data = models.JSONField(default=dict, blank=True, verbose_name="Маркетплейс та Нутрієнти")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ingredients"
+        ordering = ['name']
+        verbose_name = "Інгредієнт"
+        verbose_name_plural = "Інгредієнти"
+
+    def __str__(self):
+        return self.name
+
+
+class IngredientTranslation(models.Model):
+    """
+    Переклади назв інгредієнтів на різні мови.
+    Одна таблиця для ВСІХ мов — забезпечує єдиний пошук.
+    is_primary=True для головних мов (uk, en, es, pl, de, it, fr, ko, bg, tr, hi, ru).
+    """
+    ingredient = models.ForeignKey(
+        Ingredient, on_delete=models.CASCADE,
+        related_name='translations'
+    )
+    locale = models.CharField(max_length=10, db_index=True)  # 'en', 'uk', 'es', 'pl', ...
+    name = models.CharField(max_length=255)
+    is_primary = models.BooleanField(default=False, verbose_name="Головна мова")
+
+    class Meta:
+        db_table = "ingredient_translations"
+        unique_together = ('ingredient', 'locale')
+        indexes = [
+            models.Index(fields=['locale', 'name']),
+        ]
+        verbose_name = "Переклад інгредієнта"
+        verbose_name_plural = "Переклади інгредієнтів"
+
+    def __str__(self):
+        return f"{self.locale}: {self.name}"
+
+
 class RecipeCategory(models.Model):
     """
     Гнучка модель для зберігання Категорій та їх налаштувань.
